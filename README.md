@@ -2,8 +2,13 @@
 Defining subject-specific brain networks by individualizing templates
 
 ## Introduction
-IndNet uses a dual-regression-like seed-based approach to individualize general binary templates to specific subjects.
+IndNet is a Nipype inplementation of a dual-regression-like seed-based approach to individualize general binary templates to specific subjects.
 Resting-state and anatomical images are preprocessed and transformed into MNI space. Timecourses are extracted from the resting state images for all templates (using the first eigenvariate) and fed into a GLM analysis. Specific contrats, representing networks of interest, are tested and results are thresholded using spatial mixture modeling and subsequently binarized. In addition to the resulting main network maps (which might be overlapping), IndNet also outputs exclusive maps of the networks of interest (i.e. non-overlapping maps).
+
+<a href="https://github.com/can-lab/IndNet/blob/master/indnet_graph_simple.png">
+  <img src="https://github.com/can-lab/IndNet/raw/master/indnet_graph_simple.png" width="500">
+</a>
+
 
 ## Prerequisites
 1. Install [Nipype](https://nipype.readthedocs.io)
