@@ -232,9 +232,9 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5, threshold=0.5,
     t1_bet = Node(fsl.BET(), name="t1_bet")
 
     # Resting state preprocessing
-    rs_featpreproc = create_featreg_preproc(highpass=False, whichvol='first',
-                                            name='rs_featpreproc')
-    rs_featpreproc.inputs.inputspec.fwhm = smoothing
+    rs_realignsmooth = create_featreg_preproc(highpass=False, whichvol='first',
+                                            name='rs_realignsmooth')
+    rs_realignsmooth.inputs.inputspec.fwhm = smoothing
 
     # Register resting state to MNI
     rs_2mni = create_reg_workflow(name='rs_2mni')
@@ -365,16 +365,16 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5, threshold=0.5,
 
 
     # Connect everything
-    indnet.connect(inputspec, 'rs_file', rs_featpreproc, 'inputspec.func')
-    indnet.connect(rs_featpreproc, 'outputspec.smoothed_files',
+    indnet.connect(inputspec, 'rs_file', rs_realignsmooth, 'inputspec.func')
+    indnet.connect(rs_realignsmooth, 'outputspec.smoothed_files',
                    rs_2mni, 'inputspec.source_files')
     indnet.connect(inputspec, 't1_file',
                rs_2mni, 'inputspec.anatomical_image')
-    indnet.connect(rs_featpreproc, 'outputspec.reference',
+    indnet.connect(rs_realignsmooth, 'outputspec.reference',
                rs_2mni, 'inputspec.mean_image')
     indnet.connect(rs_2mni, ('outputspec.transformed_files', get_first_item),
                rs_aroma, 'in_file')
-    indnet.connect(rs_featpreproc, ('outputspec.motion_parameters',
+    indnet.connect(rs_realignsmooth, ('outputspec.motion_parameters',
                                     get_first_item),
                rs_aroma, 'motion_parameters')
     indnet.connect(rs_2mni, 'outputspec.transformed_mean',
