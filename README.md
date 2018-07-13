@@ -1,7 +1,10 @@
 # IndNet
 Defining subject-specific brain networks by individualizing templates
 
-IndNet uses a
+## Introduction
+IndNet uses a dual-regression-like seed-based approach to individualize general binary templates to specific subjects.
+Resting-state and anatomical images are preprocessed and transformed into MNI space. Timecourses are extracted from the resting state images for all templates (using the first eigenvariate) and fed into a GLM analysis. Specific contrats, representing networks of interest, are tested and results are thresholded using spatial mixture modeling and subsequently binarized. In addition to the resulting main network maps (which might be overlapping), IndNet also outputs exclusive maps of the networks of interest (i.e. non-overlapping maps).
+
 ## Prerequisites
 1. Install [Nipype](https://nipype.readthedocs.io)
 2. Install [FSL](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/)
