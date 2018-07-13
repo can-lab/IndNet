@@ -1,3 +1,13 @@
+"""IndNet.
+
+A Nipype implementation of a dual-regression-like seed-based approach to
+individualize general binary templates to specific subjects.
+
+"""
+
+__author__ = "Florian Krause"
+
+
 import os
 import subprocess
 from glob import glob
