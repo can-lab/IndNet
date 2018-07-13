@@ -1,2 +1,3 @@
 # IndNet
-Defining large-scale brain networks by individualizing network templates
+Defining subject-specific large-scale brain networks by individualizing network templates
+
