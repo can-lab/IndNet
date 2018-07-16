@@ -46,7 +46,7 @@ If you are working on the compute cluster of the Donders Institute, please follo
 
 ### Donders cluster
 If you are working on the compute cluster of the Donders Institute, please follow the following steps:
-1. Start a new interactive job by running command: `qsub -I -l 'procs=8, mem=16gb, walltime=4:00:00`
+1. Start a new interactive job by running command: `qsub -I -l 'procs=8, mem=16gb, walltime=4:00:00'`
 2. Load Python module by running command: `module load python`
 3. Load graphviz module by running command: `module load graphviz`
 4. Activate environment by running command: `source ~/IndNet/bin/activate`
