@@ -42,15 +42,17 @@ If you are working on the compute cluster of the Donders Institute, please follo
 ## Usage
 1. Write script with custom workflow (see `Indnet-master/example.py` for an example)
 2. Run script
+3. Results are in `results` directory within the `base_dir` set in the script
 
 ### Donders cluster
 If you are working on the compute cluster of the Donders Institute, please follow the following steps:
-1. Load Python module by running command: `module load python`
-2. Load graphviz module by running command: `module load graphviz`
-3. Activate environment by running command: `source ~/IndNet/bin/activate`
-4. Write script with custom workflow (see `Indnet-master/example.py` for an example) and save it as `my_script.py`
-5. Run script by running command: `python my_script.py`
-
+1. Start a new interactive job by running command: `qsub -I -l 'procs=8, mem=16gb, walltime=4:00:00`
+2. Load Python module by running command: `module load python`
+3. Load graphviz module by running command: `module load graphviz`
+4. Activate environment by running command: `source ~/IndNet/bin/activate`
+5. Write script with custom workflow (see `Indnet-master/example.py` for an example) and save it as `my_script.py`
+6. Run script by running command: `python my_script.py`
+7. Results are in `results` directory within the `base_dir` set in the script
 When done, deactivate environment by running command: source ~/IndNet/bin/deactivate
 
 
