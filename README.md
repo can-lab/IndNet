@@ -37,8 +37,7 @@ If you are working on the compute cluster of the Donders Institute, please follo
    - Add `ICA_AROMA.py` to path, so it can be called system wide
       - Open file `~/.bash_profile` in a text editor and add: `export PATH=/path/to/ICA-Aroma-master/:$PATH`
       - Run command `source ~/.bash_profile`
-8. Deactivate environment by running command: `source ~/IndNet/bin/deactivate`
-9. [Download IndNet](https://github.com/can-lab/IndNet/archive/master.zip) and extract `IndNet-master` to somewhere
+8. [Download IndNet](https://github.com/can-lab/IndNet/archive/master.zip) and extract `IndNet-master` to somewhere
 
 ## Usage
 1. Write script with custom workflow (see `Indnet-master/example.py` for an example)
@@ -54,6 +53,7 @@ If you are working on the compute cluster of the Donders Institute, please follo
 5. Write script with custom workflow (see `Indnet-master/example.py` for an example) and save it as `my_script.py`
 6. Run script by running command: `python my_script.py`
 7. Results are in `results` directory within the `base_dir` set in the script
-When done, deactivate environment by running command: source ~/IndNet/bin/deactivate
+
+When done, deactivate environment by running command: `source ~/IndNet/bin/deactivate`
 
 
