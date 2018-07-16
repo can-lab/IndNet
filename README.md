@@ -36,6 +36,7 @@ If you are working on the compute cluster of the Donders Institute, please follo
       - Make `ICA_AROMA.py` executable by running command: `chmod a+x ICA_AROMA.py`
    - Add `ICA_AROMA.py` to path, so it can be called system wide
       - Open file `~/.bash_profile` in a text editor and add: `export PATH=/path/to/ICA-Aroma-master/:$PATH`
+      - Run command `source ~/.bash_profile`
 8. Deactivate environment by running command: `source ~/IndNet/bin/deactivate`
 9. [Download IndNet](https://github.com/can-lab/IndNet/archive/master.zip) and extract `IndNet-master` to somewhere
 
