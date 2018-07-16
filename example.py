@@ -15,7 +15,7 @@ from glob import glob
 from nipype.interfaces import io
 from nipype.pipeline.engine import Node, Workflow
 
-from new_indnet import create_indnet_workflow
+from indnet import create_indnet_workflow
 
 
 # Set up a workflow
