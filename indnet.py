@@ -438,17 +438,17 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5, threshold=0.5,
     indnet.connect(mainmaps, 'out_mains', mainmaps_rename, 'in_file')
     indnet.connect(inputspec, ('networks', get_name),
                    mainmaps_rename, 'format_string')
-    indnet.connect(mainmaps_rename, 'out_file', outputspec, 'mainfiles')
     indnet.connect(mainmaps, 'out_firsts', exclusivemaps, 'in_file')
     indnet.connect(mainmaps, 'out_opstrings', exclusivemaps, 'op_string')
     indnet.connect(exclusivemaps, 'out_file',
                    exclusivemaps_rename, 'in_file')
     indnet.connect(inputspec, ('networks', get_name),
                    exclusivemaps_rename, 'format_string')
+    indnet.connect(mainmaps_rename, 'out_file', outputspec, 'main_files')
     indnet.connect(exclusivemaps_rename, 'out_file',
-                   outputspec, 'exclusivefiles')
+                   outputspec, 'exclusive_files')
     indnet.connect(rs_highpass, 'outputspec.filtered_file',
-                   outputspec, 'rs_preprocessed_file')
-    indnet.connect(t1_2mni, 'out_file', outputspec, 't1_preprocessed_file')
+                   outputspec, 'preprocessed_rs_file')
+    indnet.connect(t1_2mni, 'out_file', outputspec, 'preprocessed_t1_file')
 
     return indnet
