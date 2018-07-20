@@ -352,8 +352,10 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5, threshold=0.5,
     exclusivemaps_rename.inputs.keep_ext = True
 
     # Output node
-    outputspec = Node(utility.IdentityInterface(fields=['mainfiles',
-                                                        'exclusivefiles']),
+    outputspec = Node(utility.IdentityInterface(fields=['networks_main_files',
+                                                        'networks_exclusive_files',
+                                                        'preprocessed_rs_file',
+                                                        'preprocessed_t1_file']),
                       name='outputspec')
 
 
