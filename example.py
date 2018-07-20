@@ -53,10 +53,14 @@ indnet.inputs.inputspec.networks = [
 results = Node(io.DataSink(parameterization=False), name='results')
 
 # Connect indnet and output nodes
-core_networks.connect(indnet, 'outputspec.mainfiles',
-                      results, 'main')
-core_networks.connect(indnet, 'outputspec.exclusivefiles',
-                      results, 'exclusive')
+core_networks.connect(indnet, 'outputspec.networks_main_files',
+                      results, 'networks.main')
+core_networks.connect(indnet, 'outputspec.networks_exclusive_files',
+                      results, 'networks.exclusive')
+core_networks.connect(indnet, 'outputspec.preprocessed_rs_file',
+                      results, 'preprocessed.rs')
+core_networks.connect(indnet, 'outputspec.preprocessed_t1_file',
+                      results, 'preprocessed.t1')
 
 
 # Run workflow
