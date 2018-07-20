@@ -372,7 +372,7 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5, threshold=0.5,
     def get_components(x):
         return [y['components'] for y in x]
 
-    def get_name(x):
+    def get_names(x):
         return [y['name'] for y in x]
 
 
@@ -438,13 +438,13 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5, threshold=0.5,
     indnet.connect(actmaps2binmasks, 'out_file', mainmaps, 'in_files')
     indnet.connect(inputspec, 'networks', mainmaps, 'in_networks')
     indnet.connect(mainmaps, 'out_mains', mainmaps_rename, 'in_file')
-    indnet.connect(inputspec, ('networks', get_name),
+    indnet.connect(inputspec, ('networks', get_names),
                    mainmaps_rename, 'format_string')
     indnet.connect(mainmaps, 'out_firsts', exclusivemaps, 'in_file')
     indnet.connect(mainmaps, 'out_opstrings', exclusivemaps, 'op_string')
     indnet.connect(exclusivemaps, 'out_file',
                    exclusivemaps_rename, 'in_file')
-    indnet.connect(inputspec, ('networks', get_name),
+    indnet.connect(inputspec, ('networks', get_names),
                    exclusivemaps_rename, 'format_string')
     indnet.connect(mainmaps_rename, 'out_file', outputspec, 'networks_main_files')
     indnet.connect(exclusivemaps_rename, 'out_file',
