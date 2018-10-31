@@ -5,7 +5,11 @@ individualize general binary templates to specific subjects.
 
 """
 
-__author__ = "Florian Krause"
+__author__ = "Florian Krause <f.krause@donders.ru.nl>, \
+              Nikos Kogias <n.kogias@student.ru.nl>"
+
+__version__ = '0.2.0'
+__date__ = '2018-10-31'
 
 
 import os
@@ -25,7 +29,8 @@ from nipype.workflows.fmri.fsl import create_featreg_preproc, \
 
 
 class ZtransformInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, desc='textfile with values to be z-transformed',
+    in_file = File(exists=True,
+                   desc='textfile with values to be z-transformed',
                    mandatory=True)
 
 
@@ -58,7 +63,8 @@ class Ztransform(BaseInterface):
 
 class DesignMatrixInputSpec(BaseInterfaceInputSpec):
     in_files = traits.List(
-        traits.Any, mandatory=True, desc='list of one-column regressors textfiles')
+        traits.Any, mandatory=True,
+        desc='list of one-column regressors textfiles')
 
 
 class DesignMatrixOutputSpec(TraitedSpec):
@@ -227,90 +233,266 @@ def create_highpass_filter(cutoff=100, name='highpass'):
     return highpass
 
 
-def create_indnet_workflow(hp_cutoff=100, smoothing=5, threshold=0.5,
+def create_segments_2func_workflow(threshold= 0.5,
+                                  name='segments_2func_workflow'):
+    segments_2func_workflow = Workflow(name=name)
+
+    # Input Node
+    inputspec = Node(utility.IdentityInterface(fields=['segments', 
+                                                       'premat', 
+                                                       'func_file']), 
+                     name= 'inputspec')
+
+    # Calculate inverse matrix of EPI to T1
+    anat_2func_matrix = Node(fsl.ConvertXFM(invert_xfm= True), 
+                             name= 'anat_2func_matrix')
+
+    # Transform segments to EPI space
+    segments_2func_apply = MapNode(fsl.ApplyXFM(), iterfield= ['in_file'], 
+                                  name='segments_2func_apply')
+
+    # Threshold segments
+    segments_threshold = MapNode(fsl.ImageMaths(
+            op_string= '-thr {0} -bin'.format(threshold)), 
+            iterfield= ['in_file'], 
+            name= 'segments_threshold')
+
+    # Output Node
+    outputspec = Node(utility.IdentityInterface(
+        fields=['segments_2func_files', 'anat_2func_matrix_file']), 
+        name= 'outputspec')
+
+    segments_2func_workflow.connect(inputspec, 'premat', 
+                                    anat_2func_matrix, 'in_file')
+    segments_2func_workflow.connect(inputspec, 'segments', 
+                                    segments_2func_apply, 'in_file')
+    segments_2func_workflow.connect(inputspec, 'func_file', 
+                                    segments_2func_apply, 'reference')
+    segments_2func_workflow.connect(anat_2func_matrix, 'out_file', 
+                                    segments_2func_apply, 'in_matrix_file')
+    segments_2func_workflow.connect(segments_2func_apply, 'out_file', 
+                                    segments_threshold, 'in_file')    
+    segments_2func_workflow.connect(anat_2func_matrix, 'out_file', 
+                                    outputspec, 'anat_2func_matrix_file')
+    segments_2func_workflow.connect(segments_threshold, 'out_file', 
+                                    outputspec, 'segments_2func_files')
+
+    return segments_2func_workflow
+
+
+def create_templates_2func_workflow(threshold= 0.5, 
+                                   name= 'templates_2func_workflow'):
+    templates_2func_workflow = Workflow(name= name)
+
+    # Input Node
+    inputspec = Node(utility.IdentityInterface(fields= ['func_file', 
+                                                        'premat', 
+                                                        'warp', 
+                                                        'templates',]), 
+                     name= 'inputspec')
+
+    # Get the overal EPI to MNI warp
+    func_2mni_warp = Node(fsl.ConvertWarp(), name='func_2mni_warp')
+    func_2mni_warp.inputs.reference = fsl.Info.standard_image(
+            'MNI152_T1_2mm.nii.gz') 
+
+    # Calculate the inverse warp
+    mni_2func_warp = Node(fsl.InvWarp(), name= 'mni_2func_warp')
+
+    # Transform MNI templates to EPI space
+    templates_2func_apply = MapNode(fsl.ApplyWarp(), iterfield= ['in_file'], 
+                                   name= 'templates_2func_apply')
+
+    # Threshold templates
+    templates_threshold = MapNode(fsl.ImageMaths(
+            op_string= '-thr {0} -bin'.format(threshold)), 
+            iterfield= ['in_file'], 
+            name= 'templates_threshold')
+
+    # Output Node
+    outputspec = Node(utility.IdentityInterface(
+        fields=['templates_2func_files', 'func_2mni_warp']), 
+        name= 'outputspec')
+
+    # Connect the workflow nodes
+    templates_2func_workflow.connect(inputspec, 'premat', 
+                                    func_2mni_warp, 'premat')
+    templates_2func_workflow.connect(inputspec, 'warp', 
+                                    func_2mni_warp, 'warp1')
+    templates_2func_workflow.connect(inputspec, 'func_file', 
+                                    mni_2func_warp, 'reference')
+    templates_2func_workflow.connect(func_2mni_warp, 'out_file', 
+                                    mni_2func_warp, 'warp')
+    templates_2func_workflow.connect(inputspec, 'templates', 
+                                    templates_2func_apply, 'in_file')
+    templates_2func_workflow.connect(inputspec, 'func_file', 
+                                    templates_2func_apply, 'ref_file')
+    templates_2func_workflow.connect(mni_2func_warp, 'inverse_warp', 
+                                    templates_2func_apply, 'field_file')
+    templates_2func_workflow.connect(templates_2func_apply, 'out_file', 
+                                    templates_threshold, 'in_file')
+    templates_2func_workflow.connect(func_2mni_warp, 'out_file', 
+                                    outputspec, 'func_2mni_warp')
+    templates_2func_workflow.connect(templates_threshold, 'out_file', 
+                                    outputspec, 'templates_2func_files')
+
+    return templates_2func_workflow
+
+
+def create_network_masks_workflow(name="network_masks", smm_threshold=0.5):
+
+    network_masks = Workflow(name=name)
+
+    # Input node
+    inputspec = Node(utility.IdentityInterface(fields=['actmaps',
+                                                       'networks']),
+                     name='inputspec')
+
+    # Binarise results
+    actmaps2binmasks = MapNode(
+            fsl.ImageMaths(op_string='-thr {0} -bin'.format(smm_threshold)),
+            iterfield=['in_file'],
+            name='actmaps2binmasks')
+
+    # Split main masks from exclusive masks
+    mainmasks = Node(SplitMaps(), name='mainmasks')
+
+    # Combine exclusive masks
+    exclusivemasks = MapNode(fsl.ImageMaths(), iterfield=['in_file',
+                                                          'op_string'],
+                             name='exclusivemasks')
+
+    # Rename main masks
+    mainmasks_rename = MapNode(utility.Rename(), 
+                             iterfield=['in_file', 'format_string'],
+                               name='mainmasks_rename')
+    mainmasks_rename.inputs.keep_ext = True
+
+    # Rename exclusive masks
+    exclusivemasks_rename = MapNode(utility.Rename(),
+                                    iterfield=['in_file', 'format_string'],
+                                    name='exclusivemasks_rename')
+    exclusivemasks_rename.inputs.keep_ext = True
+
+    # Output Node
+    outputspec = Node(utility.IdentityInterface(fields=['main_masks', 
+                                                        'exclusive_masks']), 
+                                                name= 'outputspec')
+
+    # Helper functions
+
+    def get_names(x):
+        return [y['name'] for y in x]
+
+    network_masks.connect(inputspec, 'actmaps', actmaps2binmasks, 'in_file')
+    network_masks.connect(actmaps2binmasks, 'out_file', mainmasks, 'in_files')
+    network_masks.connect(inputspec, 'networks', mainmasks, 'in_networks')
+    network_masks.connect(mainmasks, 'out_mains', mainmasks_rename, 'in_file')
+    network_masks.connect(inputspec, ('networks', get_names),
+                         mainmasks_rename, 'format_string')
+    network_masks.connect(mainmasks, 'out_firsts', exclusivemasks, 'in_file')
+    network_masks.connect(mainmasks, 'out_opstrings',
+                          exclusivemasks, 'op_string')
+    network_masks.connect(exclusivemasks, 'out_file',
+                         exclusivemasks_rename, 'in_file')
+    network_masks.connect(inputspec, ('networks', get_names),
+                         exclusivemasks_rename, 'format_string')
+    network_masks.connect(mainmasks_rename, 'out_file',
+                          outputspec, 'main_masks')
+    network_masks.connect(exclusivemasks_rename, 'out_file',
+                          outputspec, 'exclusive_masks')
+
+    return network_masks
+
+   	
+def create_indnet_workflow(hp_cutoff=100, smoothing=5, 
+                           smm_threshold=0.5, 
+                           binarise_threshold=0.5, 
                            aggr_aroma=False, name="indnet"):
+
     indnet = Workflow(name=name)
 
     # Input node
-    inputspec = Node(utility.IdentityInterface(fields=['t1_file',
-                                                       'rs_file',
+    inputspec = Node(utility.IdentityInterface(fields=['anat_file',
+                                                       'func_file',
                                                        'templates',
                                                        'networks']),
                      name='inputspec')
 
     # T1 skullstrip
-    t1_bet = Node(fsl.BET(), name="t1_bet")
+    anat_bet = Node(fsl.BET(), name= "anat_bet")
 
-    # Resting state preprocessing
-    rs_realignsmooth = create_featreg_preproc(highpass=False, whichvol='first',
-                                            name='rs_realignsmooth')
-    rs_realignsmooth.inputs.inputspec.fwhm = smoothing
+    # EPI preprocessing
+    func_realignsmooth = create_featreg_preproc(highpass= False,
+                                               whichvol= 'first', 
+                                               name= 'func_realignsmooth')
+    func_realignsmooth.inputs.inputspec.fwhm = smoothing
 
-    # Register resting state to MNI
-    rs_2mni = create_reg_workflow(name='rs_2mni')
-    rs_2mni.inputs.inputspec.target_image = fsl.Info.standard_image(
-        'MNI152_T1_2mm.nii.gz')
-    rs_2mni.inputs.inputspec.target_image_brain = fsl.Info.standard_image(
-        'MNI152_T1_2mm_brain.nii.gz')
-    rs_2mni.inputs.inputspec.config_file = 'T1_2_MNI152_2mm'
+    # Transform EPI to MNI space
+    func_2mni = create_reg_workflow(name= 'func_2mni')
+    func_2mni.inputs.inputspec.target_image = fsl.Info.standard_image(
+            'MNI152_T1_2mm.nii.gz')
+    func_2mni.inputs.inputspec.target_image_brain = fsl.Info.standard_image(
+            'MNI152_T1_2mm_brain.nii.gz')
+    func_2mni.inputs.inputspec.config_file = 'T1_2_MNI152_2mm'
 
-    # Create mask for ICA-AROMA
-    rs_brainmask = Node(fsl.BET(), name='rs_brainmask')
-    rs_brainmask.inputs.frac = 0.3
-    rs_brainmask.inputs.mask = True
-    rs_brainmask.inputs.no_output = True
-    rs_brainmask.inputs.robust = True
+    # Segmentation of T1
+    anat_segmentation = Node(fsl.FAST(output_biascorrected=True), 
+                           name= 'anat_segmentation')
 
-    # Resting state ICA-AROMA
-    rs_aroma = Node(fsl.ICA_AROMA(), name='rs_aroma')
+    # Transfrom segments to EPI space
+    segments_2func= create_segments_2func_workflow(
+            threshold=binarise_threshold, name= 'segments_2func')
+
+    # Transform templates to EPI space
+    templates_2func= create_templates_2func_workflow(
+            threshold=binarise_threshold, name= 'templates_2func')
+
+    # Mask network templates with GM
+    gm_mask_templates = MapNode(fsl.ImageMaths(op_string= '-mul'),
+                                iterfield= ['in_file2'],
+                                name= 'gm_mask_templates')
+
+    # Mask for ICA-AROMA and statistics
+    func_brainmask = Node(fsl.BET(frac= 0.3, mask= True, 
+                                 no_output= True, robust= True), 
+                         name= 'func_brainmask')
+
+    # ICA-AROMA
+    func_aroma = Node(fsl.ICA_AROMA(), name= 'func_aroma')
     if aggr_aroma:
-        rs_aroma.inputs.denoise_type = 'aggr'
+        func_aroma.inputs.denoise_type = 'aggr'
+
     else:
-        rs_aroma.inputs.denoise_type = 'nonaggr'
+        func_aroma.inputs.denoise_type = 'nonaggr' 
 
-    # Resting state highpass filtering
-    rs_highpass = create_highpass_filter(cutoff=hp_cutoff,
-                                         name='rs_highpass')
+    # Highpass filter ICA results
+    func_highpass= create_highpass_filter(cutoff= hp_cutoff,
+                                         name= 'func_highpass')
 
-    # Register T1 to MNI
-    t1_2mni = Node(fsl.ApplyWarp(), name='t1_2mni')
-    t1_2mni.inputs.ref_file = fsl.Info.standard_image(
-        'MNI152_T1_2mm_brain.nii.gz')
+    # Calculate mean CSF sgnal
+    csf_meansignal = Node(fsl.ImageMeants(), name= 'csf_meansignal')
 
-    # Segment MNI T1
-    t1_segmentation = Node(fsl.FAST(segments=True), name='t1_segmentation')
+    # Calculate mean WM signal
+    wm_meansignal = Node(fsl.ImageMeants(), name= 'wm_meansignal')
 
-    # GM mask each network template
-    gm_networktemplates = MapNode(fsl.ImageMaths(op_string='-mul'),
-                                  iterfield=['in_file2'],
-                                  name='gm_networktemplates')
+    # Calculate first Eigenvariates 
+    firsteigenvariates = MapNode(fsl.ImageMeants(show_all= True, eig= True),
+                                 iterfield= ['mask'],
+                                 name= 'firsteigenvariates')
 
-    # Get first eigenvariate of each GM masked network template
-    firsteigenvariates = MapNode(fsl.ImageMeants(show_all=True, eig=True),
-                                 iterfield=['mask'],
-                                 name='firsteigenvariates')
-
-    # Get mean time course of WM signal
-    wm_meansignal = Node(fsl.ImageMeants(), name='wm_meansignal')
-
-    # Get mean time course of CSF signal
-    csf_meansignal = Node(fsl.ImageMeants(), name='csf_meansignal')
-
-    # Combine first eigenvariates and WM/CSF signals
+    # Combine first eigenvariates and wm/csf signals
     regressors = Node(utility.Merge(3), name='regressors')
 
     # z-transform regressors
-    ztransform = MapNode(Ztransform(), iterfield=['in_file'], name='ztransform')
+    ztransform = MapNode(Ztransform(), iterfield=['in_file'],
+                         name='ztransform')
 
     # Create design matrix
     designmatrix = Node(DesignMatrix(), name='designmatrix')
 
     # Create contrasts
     contrasts = Node(Contrasts(), name='contrasts')
-
-    # Dilate brain mask
-    rs_brainmaskdilation = Node(fsl.DilateImage(), name='rs_brainmaskdilation')
-    rs_brainmaskdilation.inputs.operation = 'max'
 
     # GLM
     glm = Node(fsl.GLM(), name='glm')
@@ -322,46 +504,52 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5, threshold=0.5,
     zmaps.inputs.dimension = 't'
 
     # Spatial Mixture Modelling
-    smm = MapNode(fsl.SMM(),iterfield=['spatial_data_file'], name='smm')
-    #smm.inputs.no_deactivation_class = True
+    smm = MapNode(fsl.SMM(),iterfield=['spatial_data_file'], name='smm') 
 
-    # Binarise results
-    actmaps2binmasks = MapNode(
-            fsl.ImageMaths(op_string='-thr {0} -bin'.format(threshold)),
-            iterfield=['in_file'],
-            name='actmaps2binmasks')
+    # Transform probability maps to native (anat) space
+    actmaps_2anat= MapNode(fsl.ApplyXFM(), iterfield=['in_file'], 
+                         name='actmaps_2anat') 
 
-    # Split main maps from diff maps
-    mainmaps = Node(SplitMaps(), name='mainmaps')
+    # Transform probability maps to MNI space
+    actmaps_2mni= MapNode(fsl.ApplyWarp(), iterfield=['in_file'], 
+                        name='actmaps_2mni')  
+    actmaps_2mni.inputs.ref_file = fsl.Info.standard_image(
+            'MNI152_T1_2mm.nii.gz')
 
-    # Combine diff maps
-    exclusivemaps = MapNode(fsl.ImageMaths(),
-                            iterfield=['in_file', 'op_string'],
-                            name='exclusivemaps')
+    # Create network masks in native (func) space
+    network_masks_func = create_network_masks_workflow(
+            name='network_masks_func', smm_threshold=smm_threshold)
 
-    # Rename main maps
-    mainmaps_rename = MapNode(utility.Rename(), iterfield=['in_file',
-                                                           'format_string'],
-                              name='mainmaps_rename')
-    mainmaps_rename.inputs.keep_ext = True
+    # Create network masks in native (anat) space
+    network_masks_anat = create_network_masks_workflow(
+            name='network_masks_anat', smm_threshold=smm_threshold)
 
-    # Rename exclusive  maps
-    exclusivemaps_rename = MapNode(utility.Rename(),
-                           iterfield=['in_file', 'format_string'],
-                           name='exclusivemaps_rename')
-    exclusivemaps_rename.inputs.keep_ext = True
+    # Create network masks in MNI space
+    network_masks_mni = create_network_masks_workflow(
+            name='network_masks_mni', smm_threshold=smm_threshold)
 
     # Output node
     outputspec = Node(utility.IdentityInterface(
-            fields=['networks_main_files',
-                    'networks_exclusive_files',
-                    'preprocessed_rs_file',
-                    'preprocessed_t1_file']), name='outputspec')
+        fields=['network_masks_func_main',
+                'network_masks_func_exclusive',
+                'network_masks_anat_main',
+                'network_masks_anat_exclusive',
+                'network_masks_mni_main',
+                'network_masks_mni_exclusive',
+                'preprocessed_func_file',
+                'preprocessed_anat_file',
+                'motion_parameters'
+                'func2anat_transform'
+                'anat2mni_transform']),
+        name='outputspec')
 
 
     # Helper functions
     def get_first_item(x):
-        return x[0]
+        try:
+            return x[0]
+        except:
+            return x
 
     def get_second_item(x):
         return x[1]
@@ -372,85 +560,177 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5, threshold=0.5,
     def get_components(x):
         return [y['components'] for y in x]
 
-    def get_names(x):
-        return [y['name'] for y in x]
 
+    # Connect the nodes
 
-    # Connect everything
-    indnet.connect(inputspec, 'rs_file', rs_realignsmooth, 'inputspec.func')
-    indnet.connect(rs_realignsmooth, 'outputspec.smoothed_files',
-                   rs_2mni, 'inputspec.source_files')
-    indnet.connect(inputspec, 't1_file',
-               rs_2mni, 'inputspec.anatomical_image')
-    indnet.connect(rs_realignsmooth, 'outputspec.reference',
-               rs_2mni, 'inputspec.mean_image')
-    indnet.connect(rs_2mni, ('outputspec.transformed_files', get_first_item),
-               rs_aroma, 'in_file')
-    indnet.connect(rs_realignsmooth, ('outputspec.motion_parameters',
-                                    get_first_item),
-               rs_aroma, 'motion_parameters')
-    indnet.connect(rs_2mni, 'outputspec.transformed_mean',
-               rs_brainmask, 'in_file')
-    indnet.connect(rs_brainmask,'mask_file', rs_aroma, 'mask')
+    # anat_bet
+    indnet.connect(inputspec, 'anat_file', anat_bet, 'in_file')
+
+    # func_realignsmooth
+    indnet.connect(inputspec, 'func_file',
+                   func_realignsmooth, 'inputspec.func')
+
+    # func_2mni
+    indnet.connect(func_realignsmooth, 'outputspec.smoothed_files', 
+                   func_2mni, 'inputspec.source_files')
+    indnet.connect(inputspec, 'anat_file', 
+                   func_2mni, 'inputspec.anatomical_image')
+    indnet.connect(func_realignsmooth, 'outputspec.reference', 
+                   func_2mni, 'inputspec.mean_image')
+
+    # anat_segmentation
+    indnet.connect(anat_bet, 'out_file', anat_segmentation, 'in_files')
+
+    # segments_2func
+    indnet.connect(anat_segmentation, 'partial_volume_files', 
+                   segments_2func, 'inputspec.segments' )
+    indnet.connect(func_2mni, 'outputspec.func2anat_transform', 
+                   segments_2func, 'inputspec.premat')
+    indnet.connect(func_realignsmooth, 'outputspec.smoothed_files',
+                   segments_2func, 'inputspec.func_file')
+
+    # templates_2func
+    indnet.connect(func_realignsmooth, 'outputspec.smoothed_files',
+                   templates_2func, 'inputspec.func_file')
+    indnet.connect(func_2mni, 'outputspec.func2anat_transform', 
+                   templates_2func, 'inputspec.premat')
+    indnet.connect(func_2mni, 'outputspec.anat2target_transform', 
+                   templates_2func, 'inputspec.warp')
+    indnet.connect(inputspec, 'templates', 
+                   templates_2func, 'inputspec.templates')
+
+    # gm_mask_templates
+    indnet.connect(segments_2func, ('outputspec.segments_2func_files',
+                                   get_second_item), 
+                   gm_mask_templates, 'in_file') 
+    indnet.connect(templates_2func, 'outputspec.templates_2func_files', 
+                   gm_mask_templates, 'in_file2')
+
+    # func_brainmask
+    indnet.connect(func_realignsmooth, 'outputspec.smoothed_files',
+                   func_brainmask, 'in_file')
+
+    # func_aroma
+    indnet.connect(func_realignsmooth, 'outputspec.smoothed_files',
+                   func_aroma, 'in_file')
+    indnet.connect(func_2mni, 'outputspec.func2anat_transform',
+                   func_aroma, 'mat_file')
+    indnet.connect(func_2mni, 'outputspec.anat2target_transform',
+                   func_aroma, 'fnirt_warp_file')
+    indnet.connect(func_realignsmooth, ('outputspec.motion_parameters',
+                                        get_first_item),
+                   func_aroma, 'motion_parameters')
+    indnet.connect(func_brainmask, 'mask_file', func_aroma, 'mask')
+
+    # func_highpass
     if aggr_aroma:
-        indnet.connect(rs_aroma, 'aggr_denoised_file',
-                rs_highpass, 'inputspec.in_file')
+        indnet.connect(func_aroma, 'aggr_denoised_file', 
+                       func_highpass, 'inputspec.in_file')
     else:
-        indnet.connect(rs_aroma, 'nonaggr_denoised_file',
-                rs_highpass, 'inputspec.in_file')
-    indnet.connect(inputspec, 't1_file', t1_bet, 'in_file')
-    indnet.connect(t1_bet, 'out_file', t1_2mni, 'in_file')
-    indnet.connect(rs_2mni, 'outputspec.anat2target_transform',
-               t1_2mni, 'field_file')
-    indnet.connect(t1_2mni, 'out_file', t1_segmentation, 'in_files')
-    indnet.connect(t1_segmentation, ('tissue_class_files', get_second_item),
-               gm_networktemplates, 'in_file')
-    indnet.connect(inputspec, 'templates',
-               gm_networktemplates, 'in_file2')
-    indnet.connect(rs_highpass, 'outputspec.filtered_file',
-               firsteigenvariates, 'in_file')
-    indnet.connect(gm_networktemplates, 'out_file',
-               firsteigenvariates, 'mask')
-    indnet.connect(t1_segmentation, ('tissue_class_files', get_third_item),
-               wm_meansignal, 'mask')
-    indnet.connect(rs_highpass, 'outputspec.filtered_file',
-                   wm_meansignal, 'in_file')
-    indnet.connect(t1_segmentation, ('tissue_class_files',
-                   get_first_item), csf_meansignal, 'mask')
-    indnet.connect(rs_highpass, 'outputspec.filtered_file',
-                   csf_meansignal, 'in_file')
+        indnet.connect(func_aroma, 'nonaggr_denoised_file', 
+                       func_highpass, 'inputspec.in_file')
+
+    # csf_meansignal
+    indnet.connect(segments_2func, ('outputspec.segments_2func_files',
+                                   get_first_item),
+                   csf_meansignal, 'mask')
+    indnet.connect(func_highpass, 'outputspec.filtered_file', 
+                   csf_meansignal, 'in_file' )
+
+    # wm_meansignal
+    indnet.connect(segments_2func, ('outputspec.segments_2func_files',
+                                   get_third_item),
+                   wm_meansignal, 'mask')
+    indnet.connect(func_highpass, 'outputspec.filtered_file', 
+                   wm_meansignal, 'in_file' )
+
+    # firsteigenvariates
+    indnet.connect(gm_mask_templates, 'out_file', 
+                   firsteigenvariates, 'mask')
+    indnet.connect(func_highpass, 'outputspec.filtered_file', 
+                   firsteigenvariates, 'in_file' )
+    
+    # regressors
     indnet.connect(firsteigenvariates, 'out_file', regressors,'in1')
     indnet.connect(wm_meansignal, 'out_file', regressors, 'in2')
     indnet.connect(csf_meansignal, 'out_file', regressors, 'in3')
+
+    # ztransform
     indnet.connect(regressors, 'out', ztransform, 'in_file')
+
+    # designmatrix
     indnet.connect(ztransform, 'out_file', designmatrix, 'in_files')
+
+    # contrasts
     indnet.connect(inputspec, ('networks', get_components),
                    contrasts, 'in_list')
     indnet.connect(designmatrix, 'out_file', glm, 'design')
     indnet.connect(designmatrix, 'out_file', contrasts, 'design')
+
+    # glm
     indnet.connect(contrasts, 'out_file', glm, 'contrasts')
-    indnet.connect(rs_brainmask, 'mask_file', glm, 'mask')
-    indnet.connect(rs_highpass, 'outputspec.filtered_file', glm, 'in_file')
+    indnet.connect(func_brainmask, 'mask_file', glm, 'mask')
+    indnet.connect(func_highpass, 'outputspec.filtered_file', glm, 'in_file')
+
+    # zmaps
     indnet.connect(glm, 'out_z', zmaps, 'in_file')
+
+    # smm
     indnet.connect(zmaps, 'out_files', smm, 'spatial_data_file')
-    indnet.connect(rs_brainmask, 'mask_file', smm, 'mask')
-    indnet.connect(smm, 'activation_p_map', actmaps2binmasks, 'in_file')
-    indnet.connect(actmaps2binmasks, 'out_file', mainmaps, 'in_files')
-    indnet.connect(inputspec, 'networks', mainmaps, 'in_networks')
-    indnet.connect(mainmaps, 'out_mains', mainmaps_rename, 'in_file')
-    indnet.connect(inputspec, ('networks', get_names),
-                   mainmaps_rename, 'format_string')
-    indnet.connect(mainmaps, 'out_firsts', exclusivemaps, 'in_file')
-    indnet.connect(mainmaps, 'out_opstrings', exclusivemaps, 'op_string')
-    indnet.connect(exclusivemaps, 'out_file',
-                   exclusivemaps_rename, 'in_file')
-    indnet.connect(inputspec, ('networks', get_names),
-                   exclusivemaps_rename, 'format_string')
-    indnet.connect(mainmaps_rename, 'out_file', outputspec, 'networks_main_files')
-    indnet.connect(exclusivemaps_rename, 'out_file',
-                   outputspec, 'networks_exclusive_files')
-    indnet.connect(rs_highpass, 'outputspec.filtered_file',
-                   outputspec, 'preprocessed_rs_file')
-    indnet.connect(t1_2mni, 'out_file', outputspec, 'preprocessed_t1_file')
+    indnet.connect(func_brainmask, 'mask_file', smm, 'mask')
+
+    # actmaps_2anat
+    indnet.connect(smm, 'activation_p_map', actmaps_2anat, 'in_file')
+    indnet.connect(func_2mni, 'outputspec.func2anat_transform', 
+                   actmaps_2anat, 'in_matrix_file')
+    indnet.connect(anat_bet, 'out_file', actmaps_2anat, 'reference')
+
+    # actmaps_2mni
+    indnet.connect(smm, 'activation_p_map', actmaps_2mni, 'in_file')
+    indnet.connect(templates_2func, 'outputspec.func_2mni_warp', 
+                   actmaps_2mni, 'field_file' )
+
+    # network_masks_func
+    indnet.connect(smm, 'activation_p_map',
+                   network_masks_func, 'inputspec.actmaps')
+    indnet.connect(inputspec, 'networks',
+                   network_masks_func, 'inputspec.networks')
+
+    # network_masks_anat
+    indnet.connect(actmaps_2anat, 'out_file',
+                   network_masks_anat, 'inputspec.actmaps')
+    indnet.connect(inputspec, 'networks',
+                   network_masks_anat, 'inputspec.networks')
+
+    # network_masks_mni
+    indnet.connect(actmaps_2mni, 'out_file',
+                   network_masks_mni, 'inputspec.actmaps')
+    indnet.connect(inputspec, 'networks',
+                   network_masks_mni, 'inputspec.networks')
+
+    # output node
+    indnet.connect(network_masks_func, 'outputspec.main_masks', 
+                   outputspec, 'network_masks_func_main')
+    indnet.connect(network_masks_func, 'outputspec.exclusive_masks',
+                   outputspec, 'network_masks_func_exclusive')
+    indnet.connect(network_masks_anat, 'outputspec.main_masks', 
+                   outputspec, 'network_masks_anat_main')
+    indnet.connect(network_masks_anat, 'outputspec.exclusive_masks',
+                   outputspec, 'network_masks_anat_exclusive')
+    indnet.connect(network_masks_mni, 'outputspec.main_masks', 
+                   outputspec, 'network_masks_mni_main')
+    indnet.connect(network_masks_mni, 'outputspec.exclusive_masks', 
+                   outputspec, 'network_masks_mni_exclusive')
+    indnet.connect(func_highpass, 'outputspec.filtered_file',
+                   outputspec, 'preprocessed_func_file')
+    indnet.connect(anat_segmentation, 'restored_image', 
+                   outputspec, 'preprocessed_anat_file')
+    indnet.connect(func_realignsmooth, ('outputspec.motion_parameters',
+                                        get_first_item), 
+                   outputspec, 'motion_parameters')
+    indnet.connect(func_2mni, 'outputspec.func2anat_transform', 
+                   outputspec, 'func2anat_transform')
+    indnet.connect(func_2mni, 'outputspec.anat2target_transform', 
+                   outputspec, 'anat2mni_transform')
 
     return indnet
