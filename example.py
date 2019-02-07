@@ -73,7 +73,7 @@ core_networks.connect(indnet, 'outputspec.motion_parameters',
                       results, 'motion_parameters')
 core_networks.connect(indnet, 'outputspec.func2anat_transform',
                       results, 'func2anat_transform')
-core_networks.connect(indnet, 'outputspec.anat2mani_transform',
+core_networks.connect(indnet, 'outputspec.anat2mni_transform',
                       results, 'anat2mni_transform')
 
 
