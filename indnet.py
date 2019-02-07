@@ -538,8 +538,8 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
                 'network_masks_mni_exclusive',
                 'preprocessed_func_file',
                 'preprocessed_anat_file',
-                'motion_parameters'
-                'func2anat_transform'
+                'motion_parameters',
+                'func2anat_transform',
                 'anat2mni_transform']),
         name='outputspec')
 
