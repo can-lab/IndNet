@@ -404,10 +404,11 @@ def create_network_masks_workflow(name="network_masks", smm_threshold=0.5):
 
     return network_masks
 
-   	
+
 def create_indnet_workflow(hp_cutoff=100, smoothing=5, 
                            smm_threshold=0.5, 
                            binarise_threshold=0.5, 
+                           fixed_melodic_seed=True,  
                            aggr_aroma=False, name="indnet"):
 
     indnet = Workflow(name=name)
@@ -457,6 +458,11 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
     func_brainmask = Node(fsl.BET(frac= 0.3, mask= True, 
                                  no_output= True, robust= True), 
                          name= 'func_brainmask')
+
+    # Melodic ICA
+    if fixed_melodic_seed:
+        func_melodic = Node(fsl.MELODIC(args= '--seed=1', out_stats= True), 
+                                        name= 'func_melodic')
 
     # ICA-AROMA
     func_aroma = Node(fsl.ICA_AROMA(), name= 'func_aroma')
@@ -571,7 +577,8 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
                    func_realignsmooth, 'inputspec.func')
 
     # func_2mni
-    indnet.connect(func_realignsmooth, 'outputspec.smoothed_files', 
+    indnet.connect(func_realignsmooth, ('outputspec.smoothed_files',
+    									get_first_item), 
                    func_2mni, 'inputspec.source_files')
     indnet.connect(inputspec, 'anat_file', 
                    func_2mni, 'inputspec.anatomical_image')
@@ -586,11 +593,13 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
                    segments_2func, 'inputspec.segments' )
     indnet.connect(func_2mni, 'outputspec.func2anat_transform', 
                    segments_2func, 'inputspec.premat')
-    indnet.connect(func_realignsmooth, 'outputspec.smoothed_files',
+    indnet.connect(func_realignsmooth, ('outputspec.smoothed_files',
+    									get_first_item),
                    segments_2func, 'inputspec.func_file')
 
     # templates_2func
-    indnet.connect(func_realignsmooth, 'outputspec.smoothed_files',
+    indnet.connect(func_realignsmooth, ('outputspec.smoothed_files',
+    									get_first_item),
                    templates_2func, 'inputspec.func_file')
     indnet.connect(func_2mni, 'outputspec.func2anat_transform', 
                    templates_2func, 'inputspec.premat')
@@ -607,11 +616,21 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
                    gm_mask_templates, 'in_file2')
 
     # func_brainmask
-    indnet.connect(func_realignsmooth, 'outputspec.smoothed_files',
+    indnet.connect(func_realignsmooth, ('outputspec.smoothed_files',
+    									get_first_item),
                    func_brainmask, 'in_file')
 
+    # func_melodic
+    if fixed_melodic_seed:    
+        indnet.connect(func_realignsmooth, ('outputspec.smoothed_files',
+                                            get_first_item),
+                        func_melodic, 'in_files')
+        indnet.connect(func_brainmask, 'mask_file', func_melodic, 'mask')
+
+
     # func_aroma
-    indnet.connect(func_realignsmooth, 'outputspec.smoothed_files',
+    indnet.connect(func_realignsmooth, ('outputspec.smoothed_files',
+    									get_first_item),
                    func_aroma, 'in_file')
     indnet.connect(func_2mni, 'outputspec.func2anat_transform',
                    func_aroma, 'mat_file')
@@ -621,6 +640,9 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
                                         get_first_item),
                    func_aroma, 'motion_parameters')
     indnet.connect(func_brainmask, 'mask_file', func_aroma, 'mask')
+    if fixed_melodic_seed:
+        indnet.connect(func_melodic, 'out_dir', func_aroma, 'melodic_dir')
+
 
     # func_highpass
     if aggr_aroma:
