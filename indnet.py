@@ -408,7 +408,7 @@ def create_network_masks_workflow(name="network_masks", smm_threshold=0.5):
 def create_indnet_workflow(hp_cutoff=100, smoothing=5, 
                            smm_threshold=0.5, 
                            binarise_threshold=0.5, 
-                           fixed_melodic_seed=True,  
+                           melodic_seed=123456,  
                            aggr_aroma=False, name="indnet"):
 
     indnet = Workflow(name=name)
@@ -460,8 +460,8 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
                          name= 'func_brainmask')
 
     # Melodic ICA
-    if fixed_melodic_seed:
-        func_melodic = Node(fsl.MELODIC(args= '--seed=1', out_stats= True), 
+    if melodic_seed != None:
+        func_melodic = Node(fsl.MELODIC(args= '--seed={}'format(melodic_seed), out_stats= True), 
                                         name= 'func_melodic')
 
     # ICA-AROMA
@@ -621,7 +621,7 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
                    func_brainmask, 'in_file')
 
     # func_melodic
-    if fixed_melodic_seed:    
+    if melodic_seed != None:    
         indnet.connect(func_realignsmooth, ('outputspec.smoothed_files',
                                             get_first_item),
                         func_melodic, 'in_files')
@@ -640,7 +640,7 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
                                         get_first_item),
                    func_aroma, 'motion_parameters')
     indnet.connect(func_brainmask, 'mask_file', func_aroma, 'mask')
-    if fixed_melodic_seed:
+    if melodic_seed != None:
         indnet.connect(func_melodic, 'out_dir', func_aroma, 'melodic_dir')
 
 
