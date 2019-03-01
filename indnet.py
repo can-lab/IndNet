@@ -461,7 +461,7 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
 
     # Melodic ICA
     if melodic_seed != None:
-        func_melodic = Node(fsl.MELODIC(args= '--seed={}'format(melodic_seed), out_stats= True), 
+        func_melodic = Node(fsl.MELODIC(args= '--seed={}'.format(melodic_seed), out_stats= True), 
                                         name= 'func_melodic')
 
     # ICA-AROMA
