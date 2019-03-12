@@ -408,7 +408,7 @@ def create_network_masks_workflow(name="network_masks", smm_threshold=0.5):
 def create_indnet_workflow(hp_cutoff=100, smoothing=5, 
                            smm_threshold=0.5, 
                            binarise_threshold=0.5, 
-                           melodic_seed=123456,  
+                           melodic_seed=None,  
                            aggr_aroma=False, name="indnet"):
 
     indnet = Workflow(name=name)
