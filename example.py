@@ -23,7 +23,7 @@ core_networks = Workflow(name='core_networks')
 core_networks.base_dir = "/path/to/base_directory/"  # set working/output directory
 
 # Create indnet node
-indnet = create_indnet_workflow(hp_cutoff=100, smoothing=5, smm_threshold=0.66, binarise_threshold=0.5, aggr_aroma=False)
+indnet = create_indnet_workflow(hp_cutoff=100, smoothing=5, smm_threshold=0.66, binarise_threshold=0.5, melodic_seed=123456, aggr_aroma=False)
 indnet.inputs.inputspec.anat_file = "/path/to/t1.nii"  # point to anatomical T1 scan (NiFTI file)
 indnet.inputs.inputspec.func_file = "/path/to/rs.nii"  # point to functional resting state scan (NiFTI file)
 TEMPL_DIR = os.path.abspath("./Functional_ROIs")  # point to FIND template directory
