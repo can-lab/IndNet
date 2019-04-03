@@ -197,7 +197,7 @@ def create_highpass_filter(cutoff=100, name='highpass'):
     # calculate sigma
     def calculate_sigma(in_file, cutoff):
         import subprocess
-        output = subprocess.check_output(['fslinfo', in_file]).split("\n")
+        output = subprocess.check_output(['fslinfo', in_file]).decode().split("\n")
         for out in output:
             if out.startswith("pixdim4"):
                 sigma = cutoff / (2 * float(out.lstrip("pixdim4")))
@@ -408,7 +408,7 @@ def create_network_masks_workflow(name="network_masks", smm_threshold=0.5):
 def create_indnet_workflow(hp_cutoff=100, smoothing=5, 
                            smm_threshold=0.5, 
                            binarise_threshold=0.5, 
-                           melodic_seed=123456,  
+                           melodic_seed=None,  
                            aggr_aroma=False, name="indnet"):
 
     indnet = Workflow(name=name)
@@ -456,7 +456,7 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
 
     # Mask for ICA-AROMA and statistics
     func_brainmask = Node(fsl.BET(frac= 0.3, mask= True, 
-                                 no_output= True, robust= True), 
+                                 no_output= True, functional= True), 
                          name= 'func_brainmask')
 
     # Melodic ICA
