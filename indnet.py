@@ -593,8 +593,7 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
                    segments_2func, 'inputspec.segments' )
     indnet.connect(func_2mni, 'outputspec.func2anat_transform', 
                    segments_2func, 'inputspec.premat')
-    indnet.connect(func_realignsmooth, ('outputspec.smoothed_files',
-                                        get_first_item),
+    indnet.connect(func_realignsmooth, 'outputspec.mean',
                    segments_2func, 'inputspec.func_file')
 
     # templates_2func
