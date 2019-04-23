@@ -678,7 +678,6 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
                         func_melodic, 'in_files')
         indnet.connect(func_brainmask, 'mask_file', func_melodic, 'mask')
 
-
     # func_aroma
     indnet.connect(func_realignsmooth, ('outputspec.smoothed_files',
                                         get_first_item),
@@ -693,7 +692,6 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
     indnet.connect(func_brainmask, 'mask_file', func_aroma, 'mask')
     if melodic_seed != None:
         indnet.connect(func_melodic, 'out_dir', func_aroma, 'melodic_dir')
-
 
     # func_highpass
     if aggr_aroma:
@@ -734,7 +732,6 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
     indnet.connect(nonbrain_meansignal, 'outputspec.nonbrain_regressor', 
                     regressors, 'in4')
 
-
     # ztransform
     indnet.connect(regressors, 'out', ztransform, 'in_file')
 
@@ -744,10 +741,10 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
     # contrasts
     indnet.connect(inputspec, ('networks', get_components),
                    contrasts, 'in_list')
-    indnet.connect(designmatrix, 'out_file', glm, 'design')
     indnet.connect(designmatrix, 'out_file', contrasts, 'design')
 
     # glm
+    indnet.connect(designmatrix, 'out_file', glm, 'design')
     indnet.connect(contrasts, 'out_file', glm, 'contrasts')
     indnet.connect(func_brainmask, 'mask_file', glm, 'mask')
     indnet.connect(func_highpass, 'outputspec.filtered_file', glm, 'in_file')
