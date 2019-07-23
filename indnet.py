@@ -197,7 +197,7 @@ def create_highpass_filter(cutoff=100, name='highpass'):
     # calculate sigma
     def calculate_sigma(in_file, cutoff):
         import subprocess
-        output = subprocess.check_output(['fslinfo', in_file]).split("\n")
+        output = subprocess.check_output(['fslinfo', in_file]).decode().split("\n")
         for out in output:
             if out.startswith("pixdim4"):
                 sigma = cutoff / (2 * float(out.lstrip("pixdim4")))
@@ -405,6 +405,56 @@ def create_network_masks_workflow(name="network_masks", smm_threshold=0.5):
     return network_masks
 
 
+def create_nonbrain_meansignal(name='nonbrain_meansignal'):
+
+    nonbrain_meansignal = Workflow(name= name)
+
+    inputspec= Node(utility.IdentityInterface(fields=['func_file']),
+                    name='inputspec')
+    
+    # Split raw 4D functional image into 3D niftis 
+    split_image = Node(fsl.Split(dimension= 't', output_type= 'NIFTI'), 
+                        name= 'split_image')
+
+    # Create a brain mask for each of the 3D images
+    brain_mask= MapNode(fsl.BET(frac= 0.3, mask= True, 
+                                 no_output= True, robust= True), 
+                        iterfield= ['in_file'], name= 'brain_mask')
+    
+    # Merge the 3D masks into a 4D nifti (producing a separate mask per volume)
+    merge_mask= Node(fsl.Merge(dimension= 't'), name= 'merge_mask')
+
+    # Reverse the 4D brain mask, to produce a 4D non brain mask
+    reverse_mask= Node(fsl.ImageMaths(op_string= '-sub 1 -mul -1'), 
+                        name= 'reverse_mask')
+    
+    # Apply the mask on the raw functional data
+    apply_mask= Node(fsl.ImageMaths(), name= 'apply_mask')
+    
+    # Highpass filter the non brain image
+    highpass= create_highpass_filter(name= 'highpass')
+    
+    # Extract the mean signal from the non brain image 
+    mean_signal= Node(fsl.ImageMeants(), name= 'mean_signal')
+
+    outputspec = Node(utility.IdentityInterface(
+                        fields=['nonbrain_regressor']),
+                        name='outputspec')
+
+
+    nonbrain_meansignal.connect(inputspec, 'func_file', split_image, 'in_file')
+    nonbrain_meansignal.connect(split_image, 'out_files', brain_mask, 'in_file')
+    nonbrain_meansignal.connect(brain_mask, 'mask_file', merge_mask, 'in_files')
+    nonbrain_meansignal.connect(merge_mask, 'merged_file', reverse_mask, 'in_file')
+    nonbrain_meansignal.connect(reverse_mask, 'out_file', apply_mask, 'mask_file')
+    nonbrain_meansignal.connect(inputspec, 'func_file', apply_mask, 'in_file')
+    nonbrain_meansignal.connect(apply_mask, 'out_file', highpass, 'inputspec.in_file')
+    nonbrain_meansignal.connect(highpass, 'outputspec.filtered_file', mean_signal, 'in_file')
+    nonbrain_meansignal.connect(mean_signal, 'out_file', outputspec, 'nonbrain_regressor')
+
+    return nonbrain_meansignal
+
+
 def create_indnet_workflow(hp_cutoff=100, smoothing=5, 
                            smm_threshold=0.5, 
                            binarise_threshold=0.5, 
@@ -461,7 +511,8 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
 
     # Melodic ICA
     if melodic_seed != None:
-        func_melodic = Node(fsl.MELODIC(args= '--seed={}'.format(melodic_seed), out_stats= True), 
+        func_melodic = Node(fsl.MELODIC(args= '--seed={}'.format(melodic_seed), 
+                                        out_stats= True), 
                                         name= 'func_melodic')
 
     # ICA-AROMA
@@ -482,13 +533,16 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
     # Calculate mean WM signal
     wm_meansignal = Node(fsl.ImageMeants(), name= 'wm_meansignal')
 
+    # Calculate mean non-brain signal
+    nonbrain_meansignal = create_nonbrain_meansignal(name= 'nonbrain_meansignal')
+
     # Calculate first Eigenvariates 
     firsteigenvariates = MapNode(fsl.ImageMeants(show_all= True, eig= True),
                                  iterfield= ['mask'],
                                  name= 'firsteigenvariates')
 
-    # Combine first eigenvariates and wm/csf signals
-    regressors = Node(utility.Merge(3), name='regressors')
+    # Combine first eigenvariates and wm/csf/non-brain signals
+    regressors = Node(utility.Merge(4), name='regressors')
 
     # z-transform regressors
     ztransform = MapNode(Ztransform(), iterfield=['in_file'],
@@ -597,8 +651,7 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
                    segments_2func, 'inputspec.func_file')
 
     # templates_2func
-    indnet.connect(func_realignsmooth, ('outputspec.smoothed_files',
-                                        get_first_item),
+    indnet.connect(func_realignsmooth, 'outputspec.mean',
                    templates_2func, 'inputspec.func_file')
     indnet.connect(func_2mni, 'outputspec.func2anat_transform', 
                    templates_2func, 'inputspec.premat')
@@ -615,8 +668,7 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
                    gm_mask_templates, 'in_file2')
 
     # func_brainmask
-    indnet.connect(func_realignsmooth, ('outputspec.smoothed_files',
-                                        get_first_item),
+    indnet.connect(func_realignsmooth, 'outputspec.mean',
                    func_brainmask, 'in_file')
 
     # func_melodic
@@ -625,7 +677,6 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
                                             get_first_item),
                         func_melodic, 'in_files')
         indnet.connect(func_brainmask, 'mask_file', func_melodic, 'mask')
-
 
     # func_aroma
     indnet.connect(func_realignsmooth, ('outputspec.smoothed_files',
@@ -641,7 +692,6 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
     indnet.connect(func_brainmask, 'mask_file', func_aroma, 'mask')
     if melodic_seed != None:
         indnet.connect(func_melodic, 'out_dir', func_aroma, 'melodic_dir')
-
 
     # func_highpass
     if aggr_aroma:
@@ -665,6 +715,10 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
     indnet.connect(func_highpass, 'outputspec.filtered_file', 
                    wm_meansignal, 'in_file' )
 
+    # nonbrain_meansignal
+    indnet.connect(inputspec, 'func_file', 
+                    nonbrain_meansignal, 'inputspec.func_file')
+
     # firsteigenvariates
     indnet.connect(gm_mask_templates, 'out_file', 
                    firsteigenvariates, 'mask')
@@ -675,6 +729,8 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
     indnet.connect(firsteigenvariates, 'out_file', regressors,'in1')
     indnet.connect(wm_meansignal, 'out_file', regressors, 'in2')
     indnet.connect(csf_meansignal, 'out_file', regressors, 'in3')
+    indnet.connect(nonbrain_meansignal, 'outputspec.nonbrain_regressor', 
+                    regressors, 'in4')
 
     # ztransform
     indnet.connect(regressors, 'out', ztransform, 'in_file')
@@ -685,10 +741,10 @@ def create_indnet_workflow(hp_cutoff=100, smoothing=5,
     # contrasts
     indnet.connect(inputspec, ('networks', get_components),
                    contrasts, 'in_list')
-    indnet.connect(designmatrix, 'out_file', glm, 'design')
     indnet.connect(designmatrix, 'out_file', contrasts, 'design')
 
     # glm
+    indnet.connect(designmatrix, 'out_file', glm, 'design')
     indnet.connect(contrasts, 'out_file', glm, 'contrasts')
     indnet.connect(func_brainmask, 'mask_file', glm, 'mask')
     indnet.connect(func_highpass, 'outputspec.filtered_file', glm, 'in_file')
