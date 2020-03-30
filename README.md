@@ -1,7 +1,7 @@
 # IndNet
 Defining subject-specific brain networks by individualizing templates
 
-[Florian Krause](https://www.ru.nl/english/people/krause-f/) & [Nikos Kogias](mailto:n.kogias@student.ru.nl)
+by [Florian Krause](https://www.floriankrause.org) & [Nikos Kogias](mailto:n.kogias@student.ru.nl)
 
 ## Introduction
 IndNet is a Nipype inplementation of a dual-regression-like seed-based approach to individualize general binary templates to specific subjects. Templates are assumed to be in MNI space.
